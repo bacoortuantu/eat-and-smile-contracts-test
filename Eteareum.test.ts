@@ -1,275 +1,360 @@
-// // import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
-// // import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";// so feel free to add new ones.
 // const { expectRevert } = require("@openzeppelin/test-helpers");
-// import { expect } from "chai";
-// import { ethers } from "hardhat";
-// import { Contract } from "@ethersproject/contracts";
-// import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-// import * as chai from "chai";
-// const chaiAsPromised = require("chai-as-promised");
-// chai.use(chaiAsPromised);
+import { expect } from "chai";
+import { ethers } from "hardhat";
+import { Contract } from "@ethersproject/contracts";
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
-// const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
+function parseEther(amount: Number) {
+  return ethers.utils.parseUnits(amount.toString(), 18);
+}
+const ETHER_1_MIL = parseEther(1 * 10 ** 6);
+const ETHER_0_4_MIL = parseEther(400 * 10 ** 3);
+const ETHER_0_6_MIL = parseEther(600 * 10 ** 3);
 
-// function parseEther(amount: Number) {
-//   return ethers.utils.parseUnits(amount.toString(), 18);
-// }
-// const ETHER_1_MIL = parseEther(1 * 10 ** 6);
-// const ETHER_0_4_MIL = parseEther(400 * 10 ** 3);
-// const ETHER_0_6_MIL = parseEther(600 * 10 ** 3);
+async function getPermitSignature(signer, token, spender, value, deadline) {
+  const [nonce, name, version, chainId] = await Promise.all([
+    token.nonces(signer.address),
+    token.name(),
+    "1",
+    signer.getChainId(),
+  ]);
 
-// // `describe` is a Mocha function that allows you to organize your tests.
-// // Having your tests organized makes debugging them easier. All Mocha
-// // functions are available in the global scope.
-// //
-// // `describe` receives the name of a section of your test suite, and a
-// // callback. The callback must define the tests of that section. This callback
-// // can't be an async function.
+  return ethers.utils.splitSignature(
+    await signer._signTypedData(
+      {
+        name,
+        version,
+        chainId,
+        verifyingContract: token.address,
+      },
+      {
+        Permit: [
+          {
+            name: "owner",
+            type: "address",
+          },
+          {
+            name: "spender",
+            type: "address",
+          },
+          {
+            name: "value",
+            type: "uint256",
+          },
+          {
+            name: "nonce",
+            type: "uint256",
+          },
+          {
+            name: "deadline",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        owner: signer.address,
+        spender,
+        value,
+        nonce,
+        deadline,
+      }
+    )
+  );
+}
 
-// describe("EatereumV2 contract", function () {
-//   let owner: SignerWithAddress,
-//     alice: SignerWithAddress,
-//     bob: SignerWithAddress,
-//     carol: SignerWithAddress;
+describe("EeatereumV2 Contract", function () {
+  let owner: SignerWithAddress,
+    alice: SignerWithAddress,
+    bob: SignerWithAddress,
+    carol: SignerWithAddress;
 
-//   //   let vault: Contract;
-//   let token: Contract;
+  //   let vault: Contract;
+  let token: Contract;
 
-//   beforeEach(async () => {
-//     await ethers.provider.send("hardhat_reset", []);
-//     [owner, alice, bob, carol] = await ethers.getSigners();
+  beforeEach(async () => {
+    await ethers.provider.send("hardhat_reset", []);
+    [owner, alice, bob, carol] = await ethers.getSigners();
 
-//     const Token = await ethers.getContractFactory("Eatereum");
-//     token = await Token.deploy();
+    const Token = await ethers.getContractFactory("Eatereum");
+    token = await Token.deploy();
 
-//     // console.log(vault);
-//     console.log({
-//       owner: owner.address,
-//       alice: alice.address,
-//       bob: bob.address,
-//       carol: carol.address,
-//       token: token.address,
-//     });
-//   });
+    // console.log(vault);
+    // console.log({
+    //   owner: owner.address,
+    //   alice: alice.address,
+    //   bob: bob.address,
+    //   carol: carol.address,
+    //   token: token.address,
+    // });
+  });
 
-//   // We define a fixture to reuse the same setup in every test. We use
-//   // loadFixture to run this setup once, snapshot that state, and reset Hardhat
-//   // Network to that snapshot in every test.
-//   //   async function deployTokenFixture() {
-//   //     const Token = await ethers.getContractFactory("Eatereum");
-//   //     const [owner, alice, bob] = await ethers.getSigners();
+  // it("Should transferFrom correctly between Alice and Bob", async function () {
+  //   // alice approve 1m + 0.6m - 0.4m = 1.2m
+  //   await token.mint(alice.address, ETHER_1_MIL);
+  //   await token.connect(alice).approve(token.address, ETHER_1_MIL);
+  //   await token.connect(alice).increaseAllowance(token.address, ETHER_0_6_MIL);
+  //   await token.connect(alice).decreaseAllowance(token.address, ETHER_0_4_MIL);
 
-//   //     // To deploy our contract, we just have to call Token.deploy() and await
-//   //     // its deployed() method, which happens onces its transaction has been
-//   //     // mined.
-//   //     const token = await Token.deploy();
+  //   const aliceAllowance = await token.allowance(alice.address, token.address);
+  //   console.log({
+  //     aliceAllowance: aliceAllowance.toString(),
+  //     tokenAddress: token.address,
+  //   });
+  // });
 
-//   //     await token.deployed();
+  // permit - valid(valid deadline) & invalid signers
+  // it("Should permit a contract and deposit successfully, reject not permitted contract and deposit failed", async function () {
+  //   const signer = owner;
 
-//   //     return { Token, token, owner, alice, bob };
-//   //   }
+  //   const Vault = await ethers.getContractFactory("Vault");
+  //   const NotPermitVault = await ethers.getContractFactory("Vault");
 
-//   // You can nest describe calls to create subsections.
-//   // describe("Deployment", function () {
-//   // `it` is another Mocha function. This is the one you use to define each
-//   // of your tests. It receives the test name, and a callback function.
-//   //
-//   // If the callback function is async, Mocha will `await` it.
-//   // it("Should set the right owner", async function () {
-//   //   // We use loadFixture to setup our environment, and then assert that
-//   //   // things went well
-//   //   const { token, owner } = await loadFixture(deployTokenFixture);
+  //   const vault = await Vault.deploy(token.address);
+  //   const notPermitVault = await NotPermitVault.deploy(token.address);
 
-//   //   // `expect` receives a value and wraps it in an assertion object. These
-//   //   // objects have a lot of utility methods to assert values.
+  //   await vault.deployed();
+  //   await notPermitVault.deployed();
 
-//   //   // This test expects the owner variable stored in the contract to be
-//   //   // equal to our Signer's owner.
-//   //   expect(await token.owner()).to.equal(owner.address);
-//   // });
+  //   const amount = 1000;
+  //   await token.mint(signer.address, amount);
 
-//   // it("Should add and remove these addresses as business addresses", async function () {
-//   //   const { token, owner, alice, bob } = await loadFixture(
-//   //     deployTokenFixture
-//   //   );
+  //   const deadline = ethers.constants.MaxUint256;
+  //   const { v, r, s } = await getPermitSignature(
+  //     signer,
+  //     token,
+  //     vault.address,
+  //     amount,
+  //     deadline
+  //   );
 
-//   //   // add
-//   //   await token
-//   //     .connect(owner)
-//   //     .acceptBusinessAddresses([alice.address, bob.address]);
+  //   await vault.depositWithPermit(amount, deadline, v, r, s);
+  //   expect(await token.balanceOf(vault.address)).to.equal(amount);
 
-//   //   const businessLists = await token.viewBusinessLists(0, 2);
-//   //   const businessList = businessLists[0];
-//   //   //   console.log({ businessList });
-//   //   await expect(businessList.includes(alice.address));
+  //   // not permitted vault get the signature of permitted vault, but failed
+  //   await expect(
+  //     notPermitVault.depositWithPermit(amount, deadline, v, r, s)
+  //   ).revertedWith("ERC20Permit: invalid signature");
+  // });
 
-//   //   // remove
-//   //   await token
-//   //     .connect(owner)
-//   //     .cancelBusinessAddresses([alice.address]);
+  // permit - invalid deadline
+  // it("Should reject over deadline permission", async function () {
+  //   const signer = owner;
 
-//   //   const businessLists2 = await token.viewBusinessLists(0, 2);
-//   //   const businessList2 = businessLists2[0];
-//   //   await expect(!businessList2.includes(alice.address));
-//   // });
+  //   const Vault = await ethers.getContractFactory("Vault");
+  //   const vault = await Vault.deploy(token.address);
+  //   await vault.deployed();
 
-//   //   it("Should add minter by owner (is a minter), then this minter can mint", async function () {
-//   //     // add minter
-//   //     await token.addMinter(alice.address);
-//   //     // check is minter
-//   //     expect(await token.isMinter(alice.address)).equal(true);
-//   //     // minter mint
-//   //     await token.connect(alice).mint(bob.address, ETHER_1_MIL);
-//   //     const bobBalance = await token.balanceOf(bob.address);
-//   //     expect(bobBalance.toString()).equal(ETHER_1_MIL.toString());
+  //   const amount = 1000;
+  //   await token.mint(signer.address, amount);
 
-//   //     // remove minter
-//   //     await token.connect(alice).renounceMinter();
-//   //     expect(await token.isMinter(alice.address)).equal(false);
-//   //     await expect(
-//   //       token.connect(alice).mint(bob.address, ETHER_1_MIL)
-//   //     ).to.revertedWithCustomError(token, "MinterRole__NotAuthorized");
-//   //   });
+  //   const deadline = 1664761695; //ethers.constants.MaxUint256;
+  //   const { v, r, s } = await getPermitSignature(
+  //     signer,
+  //     token,
+  //     vault.address,
+  //     amount,
+  //     deadline
+  //   );
 
-//   //   it("Should lock user, then the user cannot transfer", async function () {
-//   //     // lock alice
-//   //     await token.mint(alice.address, ETHER_1_MIL);
-//   //     await token.setLockUser(alice.address, true);
-//   //     // alice cannot transfer
-//   //     await expect(
-//   //       token.connect(alice).transfer(bob.address, ETHER_0_4_MIL)
-//   //     ).to.revertedWithCustomError(token, "Lockable__Locked");
-//   //   });
+  //   await expect(
+  //     vault.depositWithPermit(amount, deadline, v, r, s)
+  //   ).revertedWith("ERC20Permit: expired deadline");
+  // });
 
-//   it("Should transferFrom correctly between Alice and Bob", async function () {
-//     // alice approve 1m + 0.6m - 0.4m = 1.2m
-//     await token.mint(alice.address, ETHER_1_MIL);
-//     await token.connect(alice).approve(token.address, ETHER_1_MIL);
-//     await token.connect(alice).increaseAllowance(token.address, ETHER_0_6_MIL);
-//     await token.connect(alice).decreaseAllowance(token.address, ETHER_0_4_MIL);
+  // acceptBusinessAddresses, cancelBusinessAddresses
+  // it("Should add and remove these addresses as business addresses", async function () {
+  //   // add
+  //   await token
+  //     .connect(owner)
+  //     .acceptBusinessAddresses([alice.address, bob.address]);
 
-//     const aliceAllowance = await token.allowance(alice.address, token.address);
-//     console.log({
-//       aliceAllowance: aliceAllowance.toString(),
-//       tokenAddress: token.address,
-//     });
+  //   const businessLists = await token.viewBusinessLists(0, 2);
+  //   const businessList = businessLists[0];
+  //   await expect(businessList.includes(alice.address));
 
-//     // transferFrom success
-//     // await token.transferFrom(alice.address, bob.address, 1000);
+  //   // remove
+  //   await token.connect(owner).cancelBusinessAddresses([alice.address]);
 
-//     // transferFrom fail
-//     // await expect(
-//     //   token.transferFrom(
-//     //     alice.address,
-//     //     bob.address,
-//     //     "1300000000000000000000000"
-//     //   )
-//     // ).to.revertedWith("ERC20: insufficient allowance");
+  //   const businessLists2 = await token.viewBusinessLists(0, 2);
+  //   const businessList2 = businessLists2[0];
+  //   await expect(!businessList2.includes(alice.address));
+  // });
 
-//     // const aliceBalance = await token.balanceOf(alice.address);
-//     // const bobBalance = await token.balanceOf(bob.address);
+  // addMinter, removeMinter
+  // it("Should add or remove minter successfully", async function () {
+  //   // add minter alice
+  //   await token.addMinter(alice.address);
 
-//     // console.log({
-//     //   aliceBalance: aliceBalance.toString(),
-//     //   bobBalance: bobBalance.toString(),
-//     // });
-//     // expect(await token.balanceOf(alice.address)).equal("0");
-//     // expect(await token.balanceOf(bob.address)).equal(
-//     //   "1200000000000000000000000"
-//     // );
+  //   // check alice is a minter
+  //   expect(await token.isMinter(alice.address)).equal(true);
+  //   // alice can mint
+  //   await token.connect(alice).mint(bob.address, ETHER_1_MIL);
+  //   const bobBalance = await token.balanceOf(bob.address);
+  //   expect(bobBalance.toString()).equal(ETHER_1_MIL.toString());
 
-//     // console.log({
-//     //   aliceAllowance: aliceAllowance.toString(),
-//     // });
-//     // transferFrom (success and fail)
-//     // await token.transferFrom(alice);
-//     // check balance
-//     // await token.mint(alice.address, ETHER_1_MIL);
-//     // await token.setLockUser(alice.address, true);
-//     // // alice cannot transfer
-//     // await expect(
-//     //   token.connect(alice).transfer(bob.address, ETHER_0_4_MIL)
-//     // ).to.revertedWithCustomError(token, "Lockable__Locked");
-//   });
+  //   // owner remove alice as a minter
+  //   await token.removeMinter(alice.address);
+  //   expect(await token.isMinter(alice.address)).equal(false);
+  //   await expect(
+  //     token.connect(alice).mint(bob.address, ETHER_1_MIL)
+  //   ).to.revertedWithCustomError(token, "MinterRole__NotAuthorized");
+  // });
 
-//   //   it("Renounce ownership then the owner cannot burn", async function () {
-//   //     // lock alice
-//   //     await token.mint(alice.address, ETHER_1_MIL);
-//   //     await token.setLockUser(alice.address, true);
-//   //     // alice cannot transfer
-//   //     await expect(
-//   //       token.connect(alice).transfer(bob.address, ETHER_0_4_MIL)
-//   //     ).to.revertedWithCustomError(token, "Lockable__Locked");
-//   //   });
+  // transferFrom (valid/invalid allowance), decreaseAllowance, increaseAllowance
+  // it("Should transferFrom base on increase/decrease allowance correctly between Alice, Bob and Carol", async function () {
+  //   // alice approve 1m + 0.6m - 0.4m = 1.2m for bob
+  //   await token.mint(alice.address, ETHER_1_MIL);
+  //   await token.connect(alice).approve(bob.address, ETHER_1_MIL);
+  //   await token.connect(alice).increaseAllowance(bob.address, ETHER_0_6_MIL);
+  //   await token.connect(alice).decreaseAllowance(bob.address, ETHER_0_4_MIL);
 
-//   //   const businessAddresses = await token.
-//   //   expect(await token.viewBusinessListsCount).to.equal(2);
-//   //   expect(token.viewBusinessListsCount).to.equal(2);
+  //   const allowance = await token.allowance(alice.address, bob.address);
+  //   console.log({
+  //     allowance: allowance.toString(),
+  //     tokenAddress: token.address,
+  //   });
 
-//   //   expect(isMinter).to.equal(true);
-//   // });
+  //   // bob transfer to carol with the valid balance
+  //   await token
+  //     .connect(bob)
+  //     .transferFrom(alice.address, carol.address, ETHER_0_4_MIL);
+  //   expect(await token.balanceOf(carol.address)).equal(ETHER_0_4_MIL);
 
-//   //   0x858367E33d86756C205ecF5de7243C71c0dAE2Df
+  //   // bob transfer to carol with the invalid balance
+  //   await expect(
+  //     token
+  //       .connect(bob)
+  //       .transferFrom(alice.address, carol.address, "1300000000000000000000000")
+  //   ).to.revertedWith("ERC20: insufficient allowance");
+  // });
 
-//   // it("Should assign 0x858367E33d86756C205ecF5de7243C71c0dAE2Df as the minter", async function () {
-//   //   const { token } = await loadFixture(deployTokenFixture);
-//   //   const isMinter = await token.isMinter(
-//   //     "0x858367E33d86756C205ecF5de7243C71c0dAE2Df"
-//   //   );
-//   //   expect(isMinter).to.equal(true);
-//   // });
-//   // });
+  // transfer(valid/invalid balance)
+  // it("Should transfer correctly between Alice and Bob", async function () {
+  //   await token.mint(alice.address, ETHER_1_MIL);
 
-//   // describe("Transactions", function () {
-//   //   it("Should transfer tokens between accounts", async function () {
-//   //     const { token, owner, alice, bob } = await loadFixture(
-//   //       deployTokenFixture
-//   //     );
-//   //     // Transfer 50 tokens from owner to alice
-//   //     await expect(
-//   //       token.transfer(alice.address, 50)
-//   //     ).to.changeTokenBalances(token, [owner, alice], [-50, 50]);
+  //   // alice transfer to bob with the valid balance
+  //   await token.connect(alice).transfer(bob.address, ETHER_0_4_MIL);
+  //   expect(await token.balanceOf(bob.address)).equal(ETHER_0_4_MIL);
 
-//   //     // Transfer 50 tokens from alice to bob
-//   //     // We use .connect(signer) to send a transaction from another account
-//   //     await expect(
-//   //       token.connect(alice).transfer(bob.address, 50)
-//   //     ).to.changeTokenBalances(token, [alice, bob], [-50, 50]);
-//   //   });
+  //   // alice transfer to bob with the invalid balance
+  //   await expect(
+  //     token.connect(alice).transfer(bob.address, "1300000000000000000000000")
+  //   ).to.revertedWith("ERC20: transfer amount exceeds balance");
+  // });
 
-//   //   it("should emit Transfer events", async function () {
-//   //     const { token, owner, alice, bob } = await loadFixture(
-//   //       deployTokenFixture
-//   //     );
+  // transferOwnership
+  // it("Should transfer ownership to an address, then the address can do all owner's actions", async function () {
+  //   // owner transfer ownership to alice
+  //   await token.connect(owner).transferOwnership(alice.address);
 
-//   //     // Transfer 50 tokens from owner to alice
-//   //     await expect(token.transfer(alice.address, 50))
-//   //       .to.emit(token, "Transfer")
-//   //       .withArgs(owner.address, alice.address, 50);
+  //   // owner cannot do anything after transferOwnership
+  //   await expect(token.connect(owner).addMinter(bob.address)).to.revertedWith(
+  //     "Ownable: caller is not the owner"
+  //   );
 
-//   //     // Transfer 50 tokens from alice to bob
-//   //     // We use .connect(signer) to send a transaction from another account
-//   //     await expect(token.connect(alice).transfer(bob.address, 50))
-//   //       .to.emit(token, "Transfer")
-//   //       .withArgs(alice.address, bob.address, 50);
-//   //   });
+  //   // alice can do only owner's actions
+  //   await token.connect(alice).transferOwnership(owner.address);
+  // });
 
-//   //   it("Should fail if sender doesn't have enough tokens", async function () {
-//   //     const { token, owner, alice } = await loadFixture(
-//   //       deployTokenFixture
-//   //     );
-//   //     const initialOwnerBalance = await token.balanceOf(owner.address);
+  // renounceOwnership
+  // it("Should remove owner's ownership, owner cannot do only owner thing", async function () {
+  //   // owner transfer ownership to alice
+  //   await token.connect(owner).renounceOwnership();
 
-//   //     // Try to send 1 token from alice (0 tokens) to owner (1000 tokens).
-//   //     // `require` will evaluate false and revert the transaction.
-//   //     await expect(
-//   //       token.connect(alice).transfer(owner.address, 1)
-//   //     ).to.be.revertedWith("ERC20: transfer amount exceeds balance");
+  //   // owner cannot do anything after transferOwnership
+  //   await expect(token.connect(owner).addMinter(bob.address)).to.revertedWith(
+  //     "Ownable: caller is not the owner"
+  //   );
+  // });
 
-//   //     // Owner balance shouldn't have changed.
-//   //     expect(await token.balanceOf(owner.address)).to.equal(
-//   //       initialOwnerBalance
-//   //     );
-//   //   });
-//   // });
-// });
+  // setLockUser
+  it("Should lock and unlock a user", async function () {
+    // owner locks alice
+    await token.mint(alice.address, ETHER_1_MIL);
+    await token.connect(owner).setLockUser(alice.address, true);
+    await expect(
+      token.connect(alice).transfer(bob.address, ETHER_0_4_MIL)
+    ).to.revertedWithCustomError(token, "Lockable__Locked");
+
+    // owner unlocks alice
+    await token.connect(owner).setLockUser(alice.address, false);
+    expect(await token.connect(alice).transfer(bob.address, ETHER_0_4_MIL));
+    expect(await token.balanceOf(bob.address)).equal(ETHER_0_4_MIL);
+  });
+
+  // paused
+  // it("Should lock all the activities when contract is paused", async function () {
+  //   // owner transfer ownership to alice
+  //   await token.mint(alice.address, ETHER_0_6_MIL);
+  //   await token.connect(alice).approve(owner.address, ETHER_0_6_MIL);
+
+  //   await token.connect(owner).pause();
+
+  //   await expect(token.mint(alice.address, ETHER_0_6_MIL)).revertedWith(
+  //     "Pausable: paused"
+  //   );
+
+  //   await expect(token.transfer(alice.address, ETHER_1_MIL)).revertedWith(
+  //     "Pausable: paused"
+  //   );
+
+  //   await expect(
+  //     token.transferFrom(alice.address, bob.address, ETHER_0_4_MIL)
+  //   ).revertedWith("Pausable: paused");
+  // });
+
+  // unpaused
+  // it("Should lock all the activities when contract is paused", async function () {
+  //   // owner transfer ownership to alice
+  //   await token.mint(alice.address, ETHER_0_6_MIL);
+  //   await token.connect(alice).approve(owner.address, ETHER_0_6_MIL);
+
+  //   // cannot do a thing when contract is paused
+  //   await token.connect(owner).pause();
+
+  //   await expect(token.mint(alice.address, ETHER_0_6_MIL)).revertedWith(
+  //     "Pausable: paused"
+  //   );
+
+  //   await expect(token.transfer(alice.address, ETHER_1_MIL)).revertedWith(
+  //     "Pausable: paused"
+  //   );
+
+  //   await expect(
+  //     token.transferFrom(alice.address, bob.address, ETHER_0_4_MIL)
+  //   ).revertedWith("Pausable: paused");
+
+  //   // do all the thing when contract is unpause
+  //   await token.connect(owner).unpause();
+
+  //   await expect(token.mint(alice.address, ETHER_0_6_MIL));
+  //   await expect(token.transfer(alice.address, ETHER_1_MIL));
+  //   await expect(token.transferFrom(alice.address, bob.address, ETHER_0_4_MIL));
+  // });
+
+  // burn
+  // bytes32 burnId_,
+  // uint256 amount_,
+  // uint256 deadline_,
+  // uint8 v_,
+  // bytes32 r_,
+  // bytes32 s_
+  it("Should burn success with valid signer", async function () {
+    // owner transfer ownership to alice
+    await token.mint(alice.address, ETHER_0_6_MIL);
+
+    // how to burn?
+  });
+
+  // Check only owner all the functions
+  // it("Should add or remove minter successfully", async function () {
+
+  //   // addMinter/removeMinter,
+  //   expect(
+  //     await token.connect(bob.address).removeMinter(alice.address)
+  //   ).revertedWith("Ownable: caller is not the owner");
+  //   expect(
+  //     await token.connect(bob.address).addMinter(alice.address)
+  //   ).revertedWith("Ownable: caller is not the owner");
+  // });
+});
